@@ -28,6 +28,7 @@ iOSの待ち受け画面の視差効果が面白かった。
 ## 現在の状況 (Current Status)
 Geminiにほぼ書いてもらっている状況です
 Geminiに教えてもらいながらじわじわ理解を進めています
+photoshopとsplineを触り始めました
 
 ### 実装済み (Implemented)
 
