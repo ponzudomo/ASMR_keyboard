@@ -4,10 +4,14 @@ import android.annotation.SuppressLint
 import android.inputmethodservice.InputMethodService
 import android.view.View
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
@@ -219,10 +223,30 @@ fun Keyboard(isShifted: Boolean, onKeyPress: (KeyData) -> Unit) {
 }
 
 @Composable
-fun RowScope.KeyButton(keyData: KeyData, isShifted: Boolean, onPress: (KeyData) -> Unit) {
-    var isPressed by remember { mutableStateOf(false) }
+fun RowScope.KeyButton(
+    keyData: KeyData,
+    isShifted: Boolean,
+    onPress: (KeyData) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
-    val elevation by animateDpAsState(targetValue = if (isPressed) 0.dp else 4.dp)
+    val animation = ASMRKeyboardTheme.animation
+
+    val elevation by animateDpAsState(
+        targetValue = if (isPressed) 0.dp else 4.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+    )
+
+    val scaleX by animateFloatAsState(
+        targetValue = if (isPressed) animation.pressScaleX else 1f,
+        animationSpec = animation.scaleAnimationSpec
+    )
+    val scaleY by animateFloatAsState(
+        targetValue = if (isPressed) animation.pressScaleY else 1f,
+        animationSpec = animation.scaleAnimationSpec
+    )
+
     val color by animateColorAsState(
         targetValue = if (isPressed || (keyData.type == KeyType.SHIFT && isShifted)) {
             ASMRKeyboardTheme.colors.keyBackgroundColorPressed
@@ -241,22 +265,14 @@ fun RowScope.KeyButton(keyData: KeyData, isShifted: Boolean, onPress: (KeyData) 
         modifier = Modifier
             .weight(keyData.weight)
             .padding(2.dp)
+            .graphicsLayer {
+                this.scaleX = scaleX
+                this.scaleY = scaleY
+            }
             .shadow(elevation = elevation, shape = RoundedCornerShape(8.dp))
             .clip(RoundedCornerShape(8.dp))
             .background(color)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        onPress(keyData)
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
-                    }
-                )
-            }
+            .clickable(interactionSource = interactionSource, indication = null) { onPress(keyData) }
             .padding(vertical = 16.dp, horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
