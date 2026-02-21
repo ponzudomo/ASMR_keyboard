@@ -4,15 +4,16 @@
 
 ## 1. 視覚的レイヤー構造 (Visual Layering)
 
-没入感のある「立体的な」体験を作るため、UIを以下の5つのレイヤーで構成します。これらは `parallax.md` で定義される視差効果の制御対象となります。
+没入感のある「立体的な」体験を作るため、UIを以下の6つのレイヤーで構成します。これらは `parallax.md` で定義される視差効果の制御対象となります。
 
-| レイヤー | 名称 | 役割 | 実装技術 (Compose) |
-| :--- | :--- | :--- | :--- |
-| **L5** | **Overlay** | 画面全体のフィルター、周辺減光、火の粉（前面） | `Canvas`, `Brush` |
-| **L4** | **Key Effects** | 押下時のヒビ、気泡、パーティクル | `drawBehind`, `ParticleSystem` |
-| **L3** | **Key Surface** | キーの質感（氷、木、スライムの表面）、文字 | `Glassmorphism`, `Neumorphism` |
-| **L2** | **Key Base** | キーの沈み込み、動的な影 | `graphicsLayer`, `shadow` |
-| **L1** | **Background** | テーマ環境（液体、木目、炭、火影） | `Modifier.blur()`, `Image` |
+| レイヤー | 名称 | 役割                      | 実装技術 (Compose) |
+| :--- | :--- |:------------------------| :--- |
+| **L6** | **Overlay** | 画面全体のフィルター、周辺減光、火の粉（前面） | `Canvas`, `Brush` |
+| **L5** | **Key Effects** | 押下時のヒビ、気泡、パーティクル        | `drawBehind`, `ParticleSystem` |
+| **L4** | **Key Surface** | キーの表面、文字、光沢             | `Glassmorphism`, `Neumorphism` |
+| **L3** | **Key Body** | キーの側面、厚みの表現             | `graphicsLayer`, `Border` |
+| **L2** | **Key Base** | キーの沈み込みの底、動的な影          | `graphicsLayer`, `shadow` |
+| **L1** | **Background** | テーマ環境（液体、木目、炭、火影）       | `Modifier.blur()`, `Image` |
 
 ---
 
