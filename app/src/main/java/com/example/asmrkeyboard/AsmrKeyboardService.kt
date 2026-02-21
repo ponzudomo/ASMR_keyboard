@@ -49,7 +49,6 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var rotationSensor: Sensor? = null
 
-    // Parallax Tilt States
     private var tiltX by mutableFloatStateOf(0f)
     private var tiltY by mutableFloatStateOf(0f)
 
@@ -98,30 +97,47 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
                 var currentTheme by remember { mutableStateOf<KeyboardTheme>(KeyboardTheme.Wood) }
                 
                 ASMRKeyboardTheme(theme = currentTheme) {
-                    Box(modifier = Modifier.fillMaxWidth().background(Color.Black)) {
+                    // Fix: Root Box uses wrapContentHeight and fillMaxWidth
+                    Box(modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight() // Set height based on content
+                        .background(Color.Black)
+                    ) {
                         
-                        // L1: Background Layer (Moves opposite to tilt, large amount)
+                        // L1: Background Layer
+                        // Fix: use matchParentSize instead of fillMaxSize
                         Box(modifier = Modifier
-                            .fillMaxSize()
+                            .matchParentSize() // Match the size of the parent Box
                             .graphicsLayer {
                                 translationX = tiltX * -40f
                                 translationY = tiltY * -40f
+                                // Slightly scale up to avoid edges during tilt
+                                scaleX = 1.2f
+                                scaleY = 1.2f
                             }
                             .blur(8.dp)
                             .background(ASMRKeyboardTheme.colors.keyboardBackgroundColor.copy(alpha = 0.7f))
                         )
 
-                        Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                        // This column determines the actual size of the keyboard
+                        Column(modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight()
+                            .padding(bottom = 8.dp)
+                        ) {
                             ThemeSelector(currentTheme = currentTheme, onThemeChange = { currentTheme = it })
                             Keyboard(isShifted = isShifted, onKeyPress = ::handleKeyPress, tiltX = tiltX, tiltY = tiltY)
                         }
 
-                        // L6: Overlay Layer (Moves with tilt, large amount - vignette effect)
+                        // L6: Overlay Layer
+                        // Fix: use matchParentSize instead of fillMaxSize
                         Box(modifier = Modifier
-                            .fillMaxSize()
+                            .matchParentSize() // Match the size of the parent Box
                             .graphicsLayer {
                                 translationX = tiltX * 50f
                                 translationY = tiltY * 50f
+                                scaleX = 1.2f
+                                scaleY = 1.2f
                             }
                             .background(
                                 Brush.radialGradient(
@@ -159,7 +175,6 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
 
 @Composable
 fun Keyboard(isShifted: Boolean, onKeyPress: (KeyData) -> Unit, tiltX: Float, tiltY: Float) {
-    // コンパイルエラー回避のため、各行を明示的に List<KeyData> として作成
     val row1 = "QWERTYUIOP".map { KeyData(KeyType.CHARACTER, it.toString()) }
     val row2 = "ASDFGHJKL".map { KeyData(KeyType.CHARACTER, it.toString()) }
     val row3 = listOf(KeyData(KeyType.SHIFT, "SFT", 1.2f)) +
@@ -189,15 +204,13 @@ fun RowScope.KeyButton(keyData: KeyData, isShifted: Boolean, onPress: (KeyData) 
     val isPressed by interactionSource.collectIsPressedAsState()
     val animation = ASMRKeyboardTheme.animation
 
-    // Animation specs
     val elevation by animateDpAsState(targetValue = if (isPressed) 0.dp else 6.dp)
     val scaleX by animateFloatAsState(targetValue = if (isPressed) animation.pressScaleX else 1f, animationSpec = animation.scaleAnimationSpec)
     val scaleY by animateFloatAsState(targetValue = if (isPressed) animation.pressScaleY else 1f, animationSpec = animation.scaleAnimationSpec)
 
-    // Parallax Sensitivities (Matching parallax.md)
-    val sSurface = 12f   // L4: Small Positive
-    val sBody    = -4f   // L3: Very Small Negative
-    val sBase    = -15f  // L2: Medium Negative
+    val sSurface = 12f
+    val sBody    = -4f
+    val sBase    = -15f
 
     val tSurfaceX by animateFloatAsState(tiltX * sSurface)
     val tSurfaceY by animateFloatAsState(tiltY * sSurface)
@@ -207,29 +220,22 @@ fun RowScope.KeyButton(keyData: KeyData, isShifted: Boolean, onPress: (KeyData) 
     val tBaseY    by animateFloatAsState(tiltY * sBase)
 
     val surfaceColor by animateColorAsState(if (isPressed || (keyData.type == KeyType.SHIFT && isShifted)) ASMRKeyboardTheme.colors.keyBackgroundColorPressed else ASMRKeyboardTheme.colors.keyBackgroundColor)
-    val bodyColor = ASMRKeyboardTheme.colors.keyBackgroundColorPressed.copy(alpha = 0.8f) // Darker for side
-    val baseColor = Color.Black.copy(alpha = 0.5f) // Deep hole shadow
+    val bodyColor = ASMRKeyboardTheme.colors.keyBackgroundColorPressed.copy(alpha = 0.8f)
+    val baseColor = Color.Black.copy(alpha = 0.5f)
 
-    // Backspace continuous deletion logic
     if (isPressed && keyData.type == KeyType.BACKSPACE) {
         LaunchedEffect(keyData) {
-            delay(500) // Initial delay before repeating
+            delay(500)
             while (true) {
                 onPress(keyData)
-                delay(100) // Repeat interval
+                delay(100)
             }
         }
     }
 
     Box(modifier = Modifier.weight(keyData.weight).height(54.dp), contentAlignment = Alignment.Center) {
-        
-        // L2: Key Base (The "Hole")
         Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = tBaseX; translationY = tBaseY }.shadow(elevation / 2, RoundedCornerShape(8.dp)).background(baseColor, RoundedCornerShape(8.dp)))
-
-        // L3: Key Body (The "Side" - visible when tilted)
         Box(modifier = Modifier.fillMaxSize().padding(1.dp).graphicsLayer { translationX = tBodyX; translationY = tBodyY; this.scaleX = scaleX; this.scaleY = scaleY }.background(bodyColor, RoundedCornerShape(8.dp)))
-
-        // L4: Key Surface (The "Top")
         Box(modifier = Modifier.fillMaxSize().padding(1.dp).graphicsLayer { translationX = tSurfaceX; translationY = tSurfaceY; this.scaleX = scaleX; this.scaleY = scaleY }.shadow(elevation, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp)).background(surfaceColor).clickable(interactionSource, null) { onPress(keyData) }, contentAlignment = Alignment.Center) {
             Text(text = if (keyData.type == KeyType.CHARACTER) (if (isShifted) keyData.text.uppercase() else keyData.text.lowercase()) else keyData.text, color = ASMRKeyboardTheme.colors.keyTextColor, fontSize = if (keyData.type == KeyType.CHARACTER) 20.sp else 14.sp)
         }
