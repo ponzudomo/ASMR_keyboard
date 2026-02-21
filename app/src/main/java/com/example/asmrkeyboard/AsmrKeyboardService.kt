@@ -39,7 +39,9 @@ import com.example.asmrkeyboard.ui.theme.ASMRKeyboardTheme
 import com.example.asmrkeyboard.ui.theme.KeyboardTheme
 import kotlinx.coroutines.delay
 
-enum class KeyType { CHARACTER, BACKSPACE, SPACE, SHIFT, ENTER }
+enum class KeyType { CHARACTER, BACKSPACE, SPACE, SHIFT, ENTER, MODE_CHANGE }
+enum class KeyboardLayout { ALPHABET, SYMBOLS }
+
 data class KeyData(val type: KeyType, val text: String, val weight: Float = 1f)
 
 @SuppressLint("ClickableViewAccessibility")
@@ -49,8 +51,13 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var rotationSensor: Sensor? = null
 
+    // Parallax Tilt States
     private var tiltX by mutableFloatStateOf(0f)
     private var tiltY by mutableFloatStateOf(0f)
+
+    // Keyboard States
+    var isShifted by mutableStateOf(false)
+    var currentLayout by mutableStateOf(KeyboardLayout.ALPHABET)
 
     override fun onCreate() {
         super.onCreate()
@@ -97,21 +104,18 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
                 var currentTheme by remember { mutableStateOf<KeyboardTheme>(KeyboardTheme.Wood) }
                 
                 ASMRKeyboardTheme(theme = currentTheme) {
-                    // Fix: Root Box uses wrapContentHeight and fillMaxWidth
                     Box(modifier = Modifier
                         .fillMaxWidth()
-                        .wrapContentHeight() // Set height based on content
+                        .wrapContentHeight()
                         .background(Color.Black)
                     ) {
                         
                         // L1: Background Layer
-                        // Fix: use matchParentSize instead of fillMaxSize
                         Box(modifier = Modifier
-                            .matchParentSize() // Match the size of the parent Box
+                            .matchParentSize()
                             .graphicsLayer {
                                 translationX = tiltX * -40f
                                 translationY = tiltY * -40f
-                                // Slightly scale up to avoid edges during tilt
                                 scaleX = 1.2f
                                 scaleY = 1.2f
                             }
@@ -119,20 +123,24 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
                             .background(ASMRKeyboardTheme.colors.keyboardBackgroundColor.copy(alpha = 0.7f))
                         )
 
-                        // This column determines the actual size of the keyboard
                         Column(modifier = Modifier
                             .fillMaxWidth()
                             .wrapContentHeight()
                             .padding(bottom = 8.dp)
                         ) {
                             ThemeSelector(currentTheme = currentTheme, onThemeChange = { currentTheme = it })
-                            Keyboard(isShifted = isShifted, onKeyPress = ::handleKeyPress, tiltX = tiltX, tiltY = tiltY)
+                            Keyboard(
+                                isShifted = isShifted,
+                                currentLayout = currentLayout,
+                                onKeyPress = ::handleKeyPress,
+                                tiltX = tiltX,
+                                tiltY = tiltY
+                            )
                         }
 
                         // L6: Overlay Layer
-                        // Fix: use matchParentSize instead of fillMaxSize
                         Box(modifier = Modifier
-                            .matchParentSize() // Match the size of the parent Box
+                            .matchParentSize()
                             .graphicsLayer {
                                 translationX = tiltX * 50f
                                 translationY = tiltY * 50f
@@ -166,26 +174,51 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
                 ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
                 ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
             }
+            KeyType.MODE_CHANGE -> {
+                currentLayout = if (currentLayout == KeyboardLayout.ALPHABET) KeyboardLayout.SYMBOLS else KeyboardLayout.ALPHABET
+            }
         }
     }
 
-    var isShifted by mutableStateOf(false)
     override fun onDestroy() { super.onDestroy(); sensorManager.unregisterListener(this) }
 }
 
 @Composable
-fun Keyboard(isShifted: Boolean, onKeyPress: (KeyData) -> Unit, tiltX: Float, tiltY: Float) {
-    val row1 = "QWERTYUIOP".map { KeyData(KeyType.CHARACTER, it.toString()) }
-    val row2 = "ASDFGHJKL".map { KeyData(KeyType.CHARACTER, it.toString()) }
-    val row3 = listOf(KeyData(KeyType.SHIFT, "SFT", 1.2f)) +
-            "ZXCVBNM".map { KeyData(KeyType.CHARACTER, it.toString()) } +
-            listOf(KeyData(KeyType.BACKSPACE, "BS", 1.2f))
-    val row4 = listOf(
-        KeyData(KeyType.SPACE, "SPACE", 5f),
-        KeyData(KeyType.ENTER, "ENTER", 2f)
-    )
-
-    val keyRows = listOf(row1, row2, row3, row4)
+fun Keyboard(
+    isShifted: Boolean,
+    currentLayout: KeyboardLayout,
+    onKeyPress: (KeyData) -> Unit,
+    tiltX: Float,
+    tiltY: Float
+) {
+    val keyRows = when (currentLayout) {
+        KeyboardLayout.ALPHABET -> {
+            val row1 = "QWERTYUIOP".map { KeyData(KeyType.CHARACTER, it.toString()) }
+            val row2 = "ASDFGHJKL".map { KeyData(KeyType.CHARACTER, it.toString()) }
+            val row3 = listOf(KeyData(KeyType.SHIFT, "SFT", 1.2f)) +
+                    "ZXCVBNM".map { KeyData(KeyType.CHARACTER, it.toString()) } +
+                    listOf(KeyData(KeyType.BACKSPACE, "BS", 1.2f))
+            val row4 = listOf(
+                KeyData(KeyType.MODE_CHANGE, "?123", 1.5f),
+                KeyData(KeyType.SPACE, "SPACE", 5f),
+                KeyData(KeyType.ENTER, "ENTER", 2f)
+            )
+            listOf(row1, row2, row3, row4)
+        }
+        KeyboardLayout.SYMBOLS -> {
+            val row1 = "1234567890".map { KeyData(KeyType.CHARACTER, it.toString()) }
+            val row2 = "@#\$%&*-+()".map { KeyData(KeyType.CHARACTER, it.toString()) }
+            val row3 = listOf(KeyData(KeyType.CHARACTER, "!", 1.2f)) +
+                    "\"':;/?".map { KeyData(KeyType.CHARACTER, it.toString()) } +
+                    listOf(KeyData(KeyType.BACKSPACE, "BS", 1.2f))
+            val row4 = listOf(
+                KeyData(KeyType.MODE_CHANGE, "ABC", 1.5f),
+                KeyData(KeyType.SPACE, "SPACE", 5f),
+                KeyData(KeyType.ENTER, "ENTER", 2f)
+            )
+            listOf(row1, row2, row3, row4)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         keyRows.forEach { row ->
