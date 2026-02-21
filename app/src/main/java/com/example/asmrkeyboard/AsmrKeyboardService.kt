@@ -51,8 +51,12 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var rotationSensor: Sensor? = null
 
+    // Absolute Tilt States
     private var tiltX by mutableFloatStateOf(0f)
     private var tiltY by mutableFloatStateOf(0f)
+
+    // Baseline pitch for a natural holding angle (approx -40 degrees)
+    private val baselinePitch = -0.7f
 
     var isShifted by mutableStateOf(false)
     var currentLayout by mutableStateOf(KeyboardLayout.ALPHABET)
@@ -83,8 +87,13 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
             SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
             val orientation = FloatArray(3)
             SensorManager.getOrientation(rotationMatrix, orientation)
-            tiltY = orientation[1] // Pitch
-            tiltX = orientation[2] // Roll
+            
+            val rawPitch = orientation[1] 
+            val rawRoll = orientation[2]
+
+            // Smoothing and centering around natural holding angle
+            tiltY = (tiltY * 0.8f) + ((rawPitch - baselinePitch) * 0.2f)
+            tiltX = (tiltX * 0.8f) + (rawRoll * 0.2f)
         }
     }
 
@@ -107,13 +116,14 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
                         .wrapContentHeight()
                         .background(Color.Black)
                     ) {
+                        // L1: Background Layer
                         Box(modifier = Modifier
                             .matchParentSize()
                             .graphicsLayer {
-                                translationX = tiltX * -40f
-                                translationY = tiltY * -40f
-                                scaleX = 1.2f
-                                scaleY = 1.2f
+                                translationX = (tiltX * -40f).coerceIn(-30f, 30f)
+                                translationY = (tiltY * -40f).coerceIn(-30f, 30f)
+                                scaleX = 1.3f
+                                scaleY = 1.3f
                             }
                             .blur(8.dp)
                             .background(ASMRKeyboardTheme.colors.keyboardBackgroundColor.copy(alpha = 0.7f))
@@ -134,13 +144,14 @@ class AsmrKeyboardService : InputMethodService(), SensorEventListener {
                             )
                         }
 
+                        // L6: Overlay Layer
                         Box(modifier = Modifier
                             .matchParentSize()
                             .graphicsLayer {
-                                translationX = tiltX * 50f
-                                translationY = tiltY * 50f
-                                scaleX = 1.2f
-                                scaleY = 1.2f
+                                translationX = (tiltX * 50f).coerceIn(-40f, 40f)
+                                translationY = (tiltY * 50f).coerceIn(-40f, 40f)
+                                scaleX = 1.3f
+                                scaleY = 1.3f
                             }
                             .background(
                                 Brush.radialGradient(
@@ -226,7 +237,6 @@ fun RowScope.KeyButton(keyData: KeyData, isShifted: Boolean, onPress: (KeyData) 
     val isPressed by interactionSource.collectIsPressedAsState()
     val animation = ASMRKeyboardTheme.animation
 
-    // Animation Specs
     val pressProgress by animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
         animationSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)
@@ -236,20 +246,21 @@ fun RowScope.KeyButton(keyData: KeyData, isShifted: Boolean, onPress: (KeyData) 
     val scaleX by animateFloatAsState(targetValue = if (isPressed) animation.pressScaleX else 1f, animationSpec = animation.scaleAnimationSpec)
     val scaleY by animateFloatAsState(targetValue = if (isPressed) animation.pressScaleY else 1f, animationSpec = animation.scaleAnimationSpec)
 
-    // Parallax Sensitivity
-    val sSurface = 12f   // L4: Top
-    val sBody    = -4f   // L3: Side
-    val sBase    = -15f  // L2: Hole (Target for sinking)
+    // Parallax Sensitivity and Max Offset Caps
+    val sSurface = 15f   
+    val sBody    = -5f   
+    val sBase    = -20f  
+    val maxOffset = 25f
 
-    // Calculate base (idle) positions
-    val idleSurfaceX = tiltX * sSurface
-    val idleSurfaceY = tiltY * sSurface
-    val idleBodyX    = tiltX * sBody
-    val idleBodyY    = tiltY * sBody
-    val targetBaseX  = tiltX * sBase
-    val targetBaseY  = tiltY * sBase
+    // Calculate base (idle) positions with clamping
+    val idleSurfaceX = (tiltX * sSurface).coerceIn(-maxOffset, maxOffset)
+    val idleSurfaceY = (tiltY * sSurface).coerceIn(-maxOffset, maxOffset)
+    val idleBodyX    = (tiltX * sBody).coerceIn(-maxOffset, maxOffset)
+    val idleBodyY    = (tiltY * sBody).coerceIn(-maxOffset, maxOffset)
+    val targetBaseX  = (tiltX * sBase).coerceIn(-maxOffset, maxOffset)
+    val targetBaseY  = (tiltY * sBase).coerceIn(-maxOffset, maxOffset)
 
-    // Sinking logic: Move towards the base (shadow direction) when pressed
+    // Sinking logic
     val currentSurfaceX = idleSurfaceX + (targetBaseX - idleSurfaceX) * pressProgress
     val currentSurfaceY = idleSurfaceY + (targetBaseY - idleSurfaceY) * pressProgress
     val currentBodyX    = idleBodyX + (targetBaseX - idleBodyX) * pressProgress
@@ -270,13 +281,8 @@ fun RowScope.KeyButton(keyData: KeyData, isShifted: Boolean, onPress: (KeyData) 
     }
 
     Box(modifier = Modifier.weight(keyData.weight).height(54.dp), contentAlignment = Alignment.Center) {
-        // L2: Key Base (The "Hole" - Fixed depth)
         Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationX = targetBaseX; translationY = targetBaseY }.shadow(elevation / 2, RoundedCornerShape(8.dp)).background(baseColor, RoundedCornerShape(8.dp)))
-
-        // L3: Key Body (The "Side" - Sinks and hides)
         Box(modifier = Modifier.fillMaxSize().padding(1.dp).graphicsLayer { translationX = currentBodyX; translationY = currentBodyY; this.scaleX = scaleX; this.scaleY = scaleY }.background(bodyColor, RoundedCornerShape(8.dp)))
-
-        // L4: Key Surface (The "Top" - Sinks to the bottom)
         Box(modifier = Modifier.fillMaxSize().padding(1.dp).graphicsLayer { translationX = currentSurfaceX; translationY = currentSurfaceY; this.scaleX = scaleX; this.scaleY = scaleY }.shadow(elevation, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp)).background(surfaceColor).clickable(interactionSource, null) { onPress(keyData) }, contentAlignment = Alignment.Center) {
             Text(text = if (keyData.type == KeyType.CHARACTER) (if (isShifted) keyData.text.uppercase() else keyData.text.lowercase()) else keyData.text, color = ASMRKeyboardTheme.colors.keyTextColor, fontSize = if (keyData.type == KeyType.CHARACTER) 20.sp else 14.sp)
         }
