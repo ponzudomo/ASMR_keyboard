@@ -45,7 +45,7 @@ docs/
 ---
 
 ## 🚀 開発の優先順位
-1. **Core:** 入力機能の完備（Shift, Backspace, Spaceなど）。
+1. **Experience:** 視差効果（Parallax）のお試し実装
+2. **Core:** 入力機能の完備（Shift, Backspace, Spaceなど）。
 2. **ASMR:** SoundPoolによる低遅延な打鍵音の実装。
 3. **Visual:** テーマごとのユニークなアニメーション。
-4. **Experience:** 視差効果（Parallax）の実装。
